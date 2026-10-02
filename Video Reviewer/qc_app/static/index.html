@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Video Reviewer by Jelly</title>
+  <link rel="icon" type="image/svg+xml" href="/static/video-reviewer-icon.svg">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <button id="homeBtn" class="brand" title="Back to all videos">
+    <img src="/static/video-reviewer-icon.svg" alt="" width="36" height="23">
+    <span>Video Reviewer by Jelly</span>
+  </button>
+  <div id="projectTitle" class="project-title"></div>
+  <div id="reviewActions" class="top-actions" hidden>
+    <span id="saveState" class="muted"></span>
+    <span id="versionState" class="muted version-state" aria-live="polite"></span>
+    <button id="undoBtn" type="button" title="Undo review change" disabled>Undo</button>
+    <button id="redoBtn" type="button" title="Redo review change" disabled>Redo</button>
+    <button id="exportBtn" class="primary">Export Word report (.docx)</button>
+  </div>
+</header>
+
+<!-- HOME -->
+<main id="homeView" class="view home">
+  <section class="card">
+    <h2>Check a new video</h2>
+    <label id="drop" class="drop">
+      <input type="file" id="fileInput" accept="video/mp4,video/*" class="visually-hidden">
+      <strong>Drop an MP4 here</strong><span>or click to choose a video file</span>
+      <small class="drop-recommendation">Recommended: 25 minutes or less. Longer videos may need more processing power and time.</small>
+      <em id="fileName"></em>
+    </label>
+    <div class="script-picker">
+      <strong>Script / reference</strong>
+      <input type="file" id="scriptFileInput" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" class="visually-hidden">
+      <button id="scriptChoose" type="button">Choose script (PDF/DOCX)</button>
+      <span id="scriptFileName" class="muted">No script selected</span>
+    </div>
+    <section class="analysis-instructions">
+      <div>
+        <strong>Client instructions for AI review</strong>
+        <p class="muted">The selected script guides narration and visual checks. These instructions tell the local AI what to prioritize before and during analysis. Standard technical checks still run as usual.</p>
+      </div>
+      <textarea id="preAnalysisInstructions" rows="4" maxlength="20000" placeholder="For example: prioritize animal identification, use British English spelling, and flag any missing client-required disclaimer..."></textarea>
+    </section>
+    <div class="row">
+      <label>Speech-to-text accuracy
+        <select id="modelSelect">
+          <option value="base">Standard (faster)</option>
+          <option value="small">High (slower)</option>
+          <option value="medium">Best (much slower)</option>
+        </select>
+      </label>
+      <label>Narration language
+        <select id="langSelect">
+          <option value="en">English</option>
+          <option value="auto">Auto-detect</option>
+        </select>
+      </label>
+      <label>Visual AI coverage
+        <select id="visualSampleCount">
+          <option value="8">8 shots · Faster</option>
+          <option value="12" selected>12 shots · Balanced</option>
+          <option value="24">24 shots · Broader, slower</option>
+        </select>
+        <small class="muted">AI checks a script-aware sample, not every shot. Larger samples take longer.</small>
+      </label>
+      <button id="startBtn" class="primary" disabled>Start analysis</button>
+    </div>
+    <section class="ai-readiness" aria-labelledby="aiReadinessTitle">
+      <div class="ai-readiness-heading">
+        <strong id="aiReadinessTitle">Local AI readiness</strong>
+        <button id="aiReadinessRefresh" type="button">Check</button>
+      </div>
+      <div class="ai-readiness-grid" role="status" aria-live="polite" aria-atomic="true">
+        <div class="ai-readiness-item" id="aiTextReadinessItem" data-state="checking">
+          <span class="ai-readiness-indicator" aria-hidden="true"></span>
+          <div><strong>Text assistant</strong><span id="aiTextReadiness">Checking model status...</span></div>
+        </div>
+        <div class="ai-readiness-item" id="aiVisionReadinessItem" data-state="checking">
+          <span class="ai-readiness-indicator" aria-hidden="true"></span>
+          <div><strong>Visual AI</strong><span id="aiVisionReadiness">Checking Ollama...</span></div>
+        </div>
+      </div>
+    </section>
+    <div id="uploadProgress" class="upload-progress" hidden>
+      <div class="bar"><div></div></div><span></span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Your videos</h2>
+    <div id="projectList" class="projects"></div>
+  </section>
+
+  <section class="card help">
+    <details>
+      <summary>How it works</summary>
+      <ol>
+        <li><b>Script pre-review</b> (when a script and client instructions are supplied): the local AI checks for conflicts before video analysis. Its suggested checks guide later AI review; verify them against the finished video.</li>
+        <li><b>Automatic checks</b> (run on your PC, nothing is uploaded to the internet): dead air, blank clips,
+          glitches and freezes, blurry images, audio problems, low-contrast text,
+          spelling of on-screen text, and whether every year, percentage, measure and name the narrator says
+          is highlighted on screen at the right time.</li>
+        <li><b>You review</b>: play the video, click any flag to jump to it, then mark it <i>Confirm problem</i> or <i>Not a problem</i> and type a note.</li>
+        <li><b>Judgment checks</b> (scene pacing, delayed overlays, wrong footage, maps, aesthetics):
+          review the flags and use <i>AI suggest Notes / fix</i> on an issue for an editable suggestion. Verify it against the video.</li>
+        <li><b>Narrator</b>: pause on a frame showing the narrator and click <i>"This frame shows the narrator"</i>.
+          The app finds every shot he appears in.</li>
+        <li><b>Export</b> a Word report with timecodes, thumbnails, your notes and the full transcript.</li>
+      </ol>
+    </details>
+  </section>
+
+  <section class="card storage-card">
+    <details id="storageDetails">
+      <summary>Storage cleaner <span class="storage-summary-label">Review old videos, dumps, and regenerable caches</span></summary>
+      <div class="storage-content">
+        <div class="storage-heading">
+          <p class="muted">Selected cleanup items are permanently deleted. This cannot be undone.</p>
+          <button id="storageScanBtn" type="button">Scan storage</button>
+        </div>
+        <div id="storageSummary" class="storage-summary muted" aria-live="polite">Scanning local storage...</div>
+        <div id="storageList" class="storage-list"></div>
+        <div class="storage-actions">
+          <label><input id="storageSelectAll" type="checkbox"> Select all listed items</label>
+          <button id="storageCleanBtn" class="danger" type="button" disabled>Permanently delete selected</button>
+        </div>
+        <p class="storage-warning muted">Active projects and bundled face models are protected. Nothing is removed until you select items and confirm.</p>
+      </div>
+    </details>
+  </section>
+</main>
+
+<!-- PROGRESS -->
+<main id="progressView" class="view" hidden>
+  <section class="card progress-card">
+    <div class="progress-heading">
+      <h2 id="progressTitle">Analysing your video...</h2>
+      <div class="progress-heading-actions">
+        <button id="progressPauseBtn" type="button" hidden>Pause</button>
+        <span id="progressPercent" class="progress-percent">0%</span>
+      </div>
+    </div>
+    <div class="bar big"><div id="progressBar"></div></div>
+    <section class="analysis-current" aria-live="polite">
+      <span class="analysis-current-label">Current activity</span>
+      <strong id="progressPhase">Preparing analysis</strong>
+      <p id="progressMsg">Waiting to start...</p>
+      <p id="progressWaitHint" class="muted" hidden>Still working on this step; it does not report a precise percentage.</p>
+    </section>
+    <ol id="analysisStages" class="analysis-stages" aria-label="Analysis stages">
+      <li data-phase="pre_review"><span class="stage-mark">1</span><span class="stage-copy"><strong>Script pre-review</strong><span>Compare the script with your client instructions.</span></span><span class="stage-state">Waiting</span></li>
+      <li data-phase="audio"><span class="stage-mark">2</span><span class="stage-copy"><strong>Audio checks</strong><span>Extract audio and check levels and clipping.</span></span><span class="stage-state">Waiting</span></li>
+      <li data-phase="motion"><span class="stage-mark">3</span><span class="stage-copy"><strong>Video structure</strong><span>Scan for cuts, blank frames, freezes, and glitches.</span></span><span class="stage-state">Waiting</span></li>
+      <li data-phase="speech"><span class="stage-mark">4</span><span class="stage-copy"><strong>Speech transcription</strong><span>Recognize narration and attach word timestamps.</span></span><span class="stage-state">Waiting</span></li>
+      <li data-phase="frames"><span class="stage-mark">5</span><span class="stage-copy"><strong>Frame and text scan</strong><span>Read on-screen text; check faces and picture sharpness.</span></span><span class="stage-state">Waiting</span></li>
+      <li data-phase="checks"><span class="stage-mark">6</span><span class="stage-copy"><strong>Automatic comparisons</strong><span>Compare narration with on-screen text and highlights.</span></span><span class="stage-state">Waiting</span></li>
+      <li data-phase="text_ai"><span class="stage-mark">7</span><span class="stage-copy"><strong>Local AI text cross-check</strong><span>Look for possible mismatches between narration and OCR.</span></span><span class="stage-state">Waiting</span></li>
+      <li data-phase="visual_review"><span class="stage-mark">8</span><span class="stage-copy"><strong>Local AI visual pre-review</strong><span>Check a script-aware sample against narration; likely concerns are flagged and uncertain ones need your review.</span></span><span class="stage-state">Waiting</span></li>
+    </ol>
+    <aside class="progress-live-commentary" aria-live="polite">
+      <strong>Live analysis commentary</strong>
+      <p id="progressCommentary" class="muted progress-commentary">Timing this run on your PC; an estimated time remaining will appear after measurable progress. First-time model downloads may take longer.</p>
+    </aside>
+    <div id="progressError" class="error-box" hidden>
+      <p id="progressErrorText"></p>
+      <button id="rerunBtn" class="primary">Re-run analysis</button>
+    </div>
+  </section>
+</main>
+
+<!-- REVIEW -->
+<main id="reviewView" class="view review" hidden>
+  <div class="left">
+    <video id="player" controls preload="auto"></video>
+    <div class="timebar">
+      <span id="clock" class="clock">00:00:00:00</span>
+      <span id="clockReal" class="muted"></span>
+      <span class="keys muted">Space play/pause &middot; &larr;/&rarr; 1 s &middot; , / . 1 frame &middot; N add note</span>
+    </div>
+    <div id="timeline" class="timeline" title="Click to jump. Grey ticks are cuts, coloured marks are issues.">
+      <div id="playhead" class="playhead"></div>
+    </div>
+    <div class="legend muted">
+      <span><i class="dot sev-error"></i>Problem</span>
+      <span><i class="dot sev-warning"></i>Likely issue</span>
+      <span><i class="dot sev-check"></i>Please check</span>
+      <span><i class="dot sev-manual"></i>Your notes</span>
+    </div>
+    <div id="nowIssues" class="now-issues"></div>
+
+    <div class="card add-note">
+      <h3>Add a note at the current time</h3>
+      <div class="row">
+        <select id="addCategory"></select>
+        <input id="addText" placeholder="What's wrong? e.g. shows a ferret but narrator says mongoose">
+        <button id="addBtn" class="primary">Add</button>
+      </div>
+    </div>
+    <div id="warnings"></div>
+  </div>
+
+  <div class="right">
+    <nav class="tabs">
+      <button data-tab="issues" class="active">Issues <span id="issueCount" class="count"></span></button>
+      <button data-tab="highlights">Highlights</button>
+      <button data-tab="transcript">Transcript</button>
+      <button data-tab="assistant">Assistant</button>
+    </nav>
+
+    <section class="panel" data-panel="issues">
+      <div class="filters">
+        <select id="filterCategory"><option value="">All categories</option></select>
+        <select id="filterStatus">
+          <option value="active">To review + confirmed</option>
+          <option value="open">To review</option>
+          <option value="confirmed">Confirmed</option>
+          <option value="dismissed">Dismissed</option>
+          <option value="">Everything</option>
+        </select>
+        <select id="filterSeverity">
+          <option value="">Any severity</option>
+          <option value="error">Problems</option>
+          <option value="warning">Likely issues</option>
+          <option value="check">Please check</option>
+          <option value="manual">Your notes</option>
+        </select>
+        <button id="dedupeBtn" class="primary">Review repeated issues</button>
+      </div>
+      <div id="preReviewResult" class="warn" hidden></div>
+      <div id="visualReviewResult" class="visual-review-summary" role="status" aria-live="polite" hidden></div>
+      <div id="dedupeStatus" class="muted dedupe-status" aria-live="polite"></div>
+      <div class="dedupe-bulk-actions">
+        <button id="dedupeDismissAll" hidden>Dismiss all repeats</button>
+        <button id="dedupeCloseReview" hidden>Close for now</button>
+      </div>
+      <div id="dedupeResults" class="dedupe-results"></div>
+      <div id="issueList" class="list"></div>
+      <section class="review-summary">
+        <label class="field">Reviewer name <input id="reviewer" placeholder="Your name"></label>
+        <label class="field">Overall notes for the editor
+          <textarea id="summary" rows="4" placeholder="General feedback for the editor"></textarea>
+        </label>
+      </section>
+    </section>
+
+    <section class="panel" data-panel="highlights" hidden>
+      <p class="muted panel-help">Every year, percentage, measure and name the narrator says, and whether matching
+        on-screen text was found. Names are guessed from capitalised words, so ignore places and organisations.</p>
+      <div id="highlightList"></div>
+    </section>
+
+    <section class="panel" data-panel="transcript" hidden>
+      <p class="muted panel-help">Click a line to jump there. The full transcript is included in the Word report.</p>
+      <div id="transcriptList" class="transcript"></div>
+    </section>
+
+    <section class="panel assistant-panel" data-panel="assistant" hidden>
+      <div class="assistant-heading">
+        <div><h2>Review assistant</h2><p id="assistantStatus" class="muted">Private local chat. First use downloads a 1.12 GB model.</p></div>
+        <button id="assistantClear" type="button" title="Clear this conversation">Clear chat</button>
+      </div>
+      <div class="assistant-script">
+        <div><strong>Script reference</strong><span id="assistantScriptStatus" class="muted">No script attached to this project.</span></div>
+        <input type="file" id="reviewScriptInput" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" class="visually-hidden">
+        <button id="reviewScriptChoose" type="button">Attach PDF/DOCX</button>
+        <button id="reviewScriptRemove" type="button" hidden>Remove script</button>
+      </div>
+      <div id="assistantMessages" class="assistant-messages" role="log" aria-live="polite"></div>
+      <form id="assistantForm" class="assistant-compose">
+        <div id="assistantIssueContext" class="assistant-issue-context" hidden>
+          <span id="assistantIssueContextLabel"></span>
+          <button id="assistantIssueContextClear" type="button" aria-label="Remove selected finding context">Remove</button>
+        </div>
+        <textarea id="assistantInput" rows="2" maxlength="2000" placeholder="Ask about findings, or ask to dismiss all findings in a category..."></textarea>
+        <div class="assistant-compose-actions">
+          <input type="file" id="assistantImageInput" accept="image/jpeg,image/png,image/webp" multiple class="visually-hidden">
+          <button id="assistantAttach" type="button">Attach image</button>
+          <button id="assistantSend" class="primary" type="submit">Send</button>
+        </div>
+        <div id="assistantAttachments" class="assistant-attachments" aria-live="polite"></div>
+        <span class="assistant-shortcut muted">Enter to send · Shift+Enter for a new line</span>
+      </form>
+    </section>
+
+  </div>
+</main>
+
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<dialog id="appConfirmDialog" class="confirm-dialog" aria-labelledby="appConfirmTitle" aria-describedby="appConfirmMessage">
+  <div class="confirm-content">
+    <span class="confirm-icon" aria-hidden="true">!</span>
+    <h2 id="appConfirmTitle">Are you sure?</h2>
+    <p id="appConfirmMessage"></p>
+    <div class="confirm-actions">
+      <button id="appConfirmCancel" type="button">Cancel</button>
+      <button id="appConfirmAccept" class="danger" type="button">Confirm</button>
+    </div>
+  </div>
+</dialog>
+<datalist id="issueCategories"></datalist>
+<script src="/static/app.js"></script>
+</body>
+</html>

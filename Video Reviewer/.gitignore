@@ -1,0 +1,19 @@
+# Local project media, reviews, and generated analysis
+qc_app/projects/
+qc_app/models/
+qc_app/app-runtime.log
+qc_app/app-runtime-error.log
+qc_app/storage-dump-*.txt
+storage-dump-*.txt
+Storage Dump.ps1
+
+# Python environments and generated files
+.venv/
+venv/
+__pycache__/
+qc_app/.venv/
+qc_app/__pycache__/
+*.py[cod]
+
+# macOS and editor metadata
+.DS_Store
